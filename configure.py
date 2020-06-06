@@ -23,9 +23,11 @@ class ConfigureApp:
 
     def __init__(self, python_path: str, mypy_config_file: str, manifest_path: str,
                  srcdir: str, ballistica_path: str, git_path: str, make_path: str,
-                 ballistica_repo_url: str, tooldir: str, tool_manifest_path: str) -> None:
+                 ballistica_repo_url: str, tooldir: str, tool_manifest_path: str,
+                 pylint_rcfile: str) -> None:
         self._python_path = python_path
         self._mypy_config_file = mypy_config_file
+        self._pylint_rcfile = pylint_rcfile
         self._manifest_path = manifest_path
         self._srcdir = srcdir
         self._ballistica_path = ballistica_path
@@ -39,23 +41,24 @@ class ConfigureApp:
 
         self._get_project_files()
         self._get_tool_files()
-    
+
     def _get_project_files(self) -> None:
         if not os.path.exists(self._manifest_path):
             self._update_manifest(initial=True)
         with open(self._manifest_path) as manifest:
             self._project_files = json.loads(manifest.read())
-    
+
     def _get_tool_files(self) -> None:
         if not os.path.exists(self._tool_manifest_path):
             self._update_tool_manifest(initial=True)
         with open(self._tool_manifest_path) as manifest:
             self._tool_files = json.loads(manifest.read())
-    
+
     def _update_manifest(self, initial: bool = False) -> None:
         with open(self._manifest_path, 'w') as manifest:
             projectfiles: List[str] = []
             for root, dirs, files in os.walk(self._srcdir):
+                del dirs  # unused.
                 for filename in files:
                     if filename.endswith('.py'):
                         projectfiles.append(os.path.join(root, filename))
@@ -64,14 +67,15 @@ class ConfigureApp:
                 if newfiles:
                     print(f'New project files detected: {", ".join(newfiles)}!')
                 else:
-                    print(f'Project manifest are up to date!')
+                    print('Project manifest are up to date!')
 
             manifest.write(json.dumps(projectfiles, indent=2))
-    
+
     def _update_tool_manifest(self, initial: bool = False) -> None:
         with open(self._tool_manifest_path, 'w') as manifest:
             toolfiles: List[str] = []
             for root, dirs, files in os.walk(self._tooldir):
+                del dirs  # unused.
                 for filename in files:
                     if filename.endswith('.py'):
                         toolfiles.append(os.path.join(root, filename))
@@ -81,23 +85,23 @@ class ConfigureApp:
                 if newfiles:
                     print(f'New tool files detected: {", ".join(newfiles)}!')
                 else:
-                    print(f'Tool manifest are up to date!')
+                    print('Tool manifest are up to date!')
 
             manifest.write(json.dumps(toolfiles, indent=2))
-    
-    def _sync_ba(self) -> None:
+
+    def _sync_ba(self, check: bool = True) -> None:
         print('Syning git repository...')
         if not os.path.exists(os.path.join(self._ballistica_path, '.git')):
             os.makedirs(os.path.dirname(self._ballistica_path), exist_ok=True)
             subprocess.run([
                 self._git_path, 'clone', self._ballistica_repo_url,
                 self._ballistica_path
-            ])
+            ], check=check)
         else:
             subprocess.run([
                 self._git_path, '-C', self._ballistica_path, 'pull'
-            ])
-    
+            ], check=True)
+
     def _create_symlinks(self) -> None:
         print('Creating symlinks...')
         for projectfile in self._project_files:
@@ -110,32 +114,58 @@ class ConfigureApp:
                 os.symlink(os.path.abspath(os.path.join(
                     self._srcdir, projectfile)), dest)
                 print(f'Created symlink to {dest}')
-    
-    def _run_ba_update(self) -> None:
+
+    def _run_ba_update(self, check: bool = True) -> None:
         print('Updating Ballistica source...')
         subprocess.run([
                 self._make_path, 'update'
-            ], cwd=self._ballistica_path)
+            ], cwd=self._ballistica_path, check=check)
 
 
-    def _mypy(self, filenames: List[str], check: bool) -> None:
-        try:
-            result = subprocess.run([
-                self._python_path, '-m', 'mypy', '--pretty', '--config-file',
-                self._mypy_config_file,
-            ] + filenames, check=check)
-        except subprocess.CalledProcessError:
-            print('Mypy: fail')
+    def _mypy(self, filenames: List[str], check: bool, use_ba_tools: bool = True) -> None:
+        if use_ba_tools:
+            subprocess.run([
+                self._make_path, 'mypy'
+            ], cwd=self._ballistica_path, check=check)
         else:
-            print('Mypy: success')
-    
+            try:
+                subprocess.run([
+                    self._python_path, '-m', 'mypy', '--pretty', '--config-file',
+                    self._mypy_config_file,
+                ] + filenames, check=check)
+            except subprocess.CalledProcessError:
+                print('Mypy: fail')
+            else:
+                print('Mypy: success')
+
+    def _pylint(self, filenames: List[str], check: bool, use_ba_tools: bool = True) -> None:
+        if use_ba_tools:
+            subprocess.run([
+                self._make_path, 'pylint'
+            ], cwd=self._ballistica_path, check=check)
+        else:
+            try:
+                subprocess.run([
+                    self._python_path, '-m', 'pylint', '--rcfile',
+                    self._pylint_rcfile, '--output-format=colorized'
+                ] + filenames, check=check)
+            except subprocess.CalledProcessError:
+                print('Pylint: fail')
+            else:
+                print('Pylint: success')
+
     def mypy(self, check: bool = True) -> None:
-        self._mypy(self._project_files + self._tool_files, check=check)
-    
+        self._mypy(self._tool_files, check=check, use_ba_tools=False)
+        self._mypy(self._project_files, check=check, use_ba_tools=True)
+
+    def pylint(self, check: bool = True) -> None:
+        self._pylint(self._tool_files, check=check, use_ba_tools=False)
+        self._pylint(self._project_files, check=check, use_ba_tools=True)
+
     def update(self) -> None:
         self._update_manifest()
         self._update_tool_manifest()
-    
+
     def sync(self) -> None:
         self._sync_ba()
         self._create_symlinks()
@@ -143,7 +173,7 @@ class ConfigureApp:
 
     @staticmethod
     def parse_args(args: Sequence[CommandLineArgument]) -> None:
-        targets = ('mypy', 'update', 'sync')
+        targets = ('mypy', 'update', 'sync', 'pylint')
         assert __doc__
         parser = argparse.ArgumentParser(
             description=__doc__.split('\n')[0])
@@ -159,6 +189,7 @@ class ConfigureApp:
         parser.add_argument('--ballistica-repo-url',
                              default='https://github.com/efroemling/ballistica.git')
         parser.add_argument('--mypy-config', default='config/mypy.ini', dest='mypy_config_file')
+        parser.add_argument('--pylintrc', default='config/pylintrc', dest='pylint_rcfile')
         ns = parser.parse_args(args[1:])
 
         app = ConfigureApp(
@@ -171,7 +202,8 @@ class ConfigureApp:
             ballistica_repo_url=ns.ballistica_repo_url,
             tooldir=ns.tooldir,
             tool_manifest_path=ns.tool_manifest_path,
-            make_path=ns.make_path)
+            make_path=ns.make_path,
+            pylint_rcfile=ns.pylint_rcfile)
         getattr(app, ns.target)()
 
 
