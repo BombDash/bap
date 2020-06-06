@@ -100,10 +100,26 @@ class ConfigureApp:
         else:
             subprocess.run([
                 self._git_path, '-C', self._ballistica_path, 'pull'
-            ], check=True)
+            ], check=check)
+
+    def _remove_broken_symlinks(self) -> None:
+        for root, dirs, files in reversed(list(os.walk(os.path.join(self._ballistica_path,
+                                                                    'assets/src/ba_data')))):
+            for dest in files:
+                dest = os.path.join(root, dest)
+                if not os.path.exists(dest) and os.path.islink(dest):
+                    print(f'removing broken symlink {dest}...')
+                    os.remove(dest)
+            for directory in dirs:
+                directory = os.path.join(root, directory)
+                if not os.listdir(directory):
+                    print(f'removing empty directory {directory}...')
+                    os.rmdir(directory)
+
 
     def _create_symlinks(self) -> None:
         print('Creating symlinks...')
+        self._remove_broken_symlinks()
         for projectfile in self._project_files:
             assert projectfile.startswith(self._srcdir)
             projectfile = projectfile[len(self._srcdir) + 1:]
@@ -153,6 +169,12 @@ class ConfigureApp:
                 print('Pylint: fail')
             else:
                 print('Pylint: success')
+    
+    def _build(self, buildtype: str, check: bool = True) -> None:
+        subprocess.run([
+            self._make_path, f'prefab-{buildtype}-build'
+        ], cwd=self._ballistica_path, check=check)
+        
 
     def mypy(self, check: bool = True) -> None:
         self._mypy(self._tool_files, check=check, use_ba_tools=False)
@@ -170,10 +192,13 @@ class ConfigureApp:
         self._sync_ba()
         self._create_symlinks()
         self._run_ba_update()
+    
+    def build(self) -> None:
+        self._build('debug')
 
     @staticmethod
     def parse_args(args: Sequence[CommandLineArgument]) -> None:
-        targets = ('mypy', 'update', 'sync', 'pylint')
+        targets = ('mypy', 'update', 'sync', 'pylint', 'build')
         assert __doc__
         parser = argparse.ArgumentParser(
             description=__doc__.split('\n')[0])

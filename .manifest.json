@@ -1,0 +1,8 @@
+[
+  "src/python/bap/__init__.py",
+  "src/python/bap/db.py",
+  "src/python/bap/pkgcontrol.py",
+  "src/python/bap/package.py",
+  "src/python/bap/pkginfo.py",
+  "src/python/bap/consts.py"
+]
