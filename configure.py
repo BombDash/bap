@@ -16,20 +16,13 @@ if TYPE_CHECKING:
     CommandLineArgument = TypeVar('CommandLineArgument', bound=str)
 
 
-def target(function: Callable[["ConfigureApp"], None]) -> Callable[["ConfigureApp"], None]:
-    setattr(function, '_is_target', True)
-
-    return function
-
-
-
 class ConfigureApp:
     """Application for BAP building"""
 
     _targets: List[Callable[["ConfigureApp"], None]]
 
     def __init__(self, python_path: str, mypy_config_file: str, manifest_path: str,
-                 srcdir: str, ballistica_path: str, git_path: str,
+                 srcdir: str, ballistica_path: str, git_path: str, make_path: str,
                  ballistica_repo_url: str, tooldir: str, tool_manifest_path: str) -> None:
         self._python_path = python_path
         self._mypy_config_file = mypy_config_file
@@ -40,6 +33,7 @@ class ConfigureApp:
         self._ballistica_repo_url = ballistica_repo_url
         self._tooldir = tooldir
         self._tool_manifest_path = tool_manifest_path
+        self._make_path = make_path
         self._project_files: List[str]
         self._tool_files: List[str]
 
@@ -92,6 +86,7 @@ class ConfigureApp:
             manifest.write(json.dumps(toolfiles, indent=2))
     
     def _sync_ba(self) -> None:
+        print('Syning git repository...')
         if not os.path.exists(os.path.join(self._ballistica_path, '.git')):
             os.makedirs(os.path.dirname(self._ballistica_path), exist_ok=True)
             subprocess.run([
@@ -102,6 +97,26 @@ class ConfigureApp:
             subprocess.run([
                 self._git_path, '-C', self._ballistica_path, 'pull'
             ])
+    
+    def _create_symlinks(self) -> None:
+        print('Creating symlinks...')
+        for projectfile in self._project_files:
+            assert projectfile.startswith(self._srcdir)
+            projectfile = projectfile[len(self._srcdir) + 1:]
+            dest = os.path.join(self._ballistica_path, 'assets/src/ba_data',
+                                projectfile)
+            if not os.path.exists(dest):
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                os.symlink(os.path.abspath(os.path.join(
+                    self._srcdir, projectfile)), dest)
+                print(f'Created symlink to {dest}')
+    
+    def _run_ba_update(self) -> None:
+        print('Updating Ballistica source...')
+        subprocess.run([
+                self._make_path, 'update'
+            ], cwd=self._ballistica_path)
+
 
     def _mypy(self, filenames: List[str], check: bool) -> None:
         try:
@@ -123,6 +138,8 @@ class ConfigureApp:
     
     def sync(self) -> None:
         self._sync_ba()
+        self._create_symlinks()
+        self._run_ba_update()
 
     @staticmethod
     def parse_args(args: Sequence[CommandLineArgument]) -> None:
@@ -131,8 +148,9 @@ class ConfigureApp:
         parser = argparse.ArgumentParser(
             description=__doc__.split('\n')[0])
         parser.add_argument('target', choices=targets)
-        parser.add_argument('--python-path', default='python3')
+        parser.add_argument('--python-path', default=sys.executable)
         parser.add_argument('--git-path', default='git')
+        parser.add_argument('--make-path', default='make')
         parser.add_argument('--manifest-path', default='.manifest.json')
         parser.add_argument('--tool-manifest-path', default='.manifest-tools.json')
         parser.add_argument('--srcdir', default='src')
@@ -147,12 +165,13 @@ class ConfigureApp:
             python_path=ns.python_path,
             mypy_config_file=ns.mypy_config_file,
             manifest_path=ns.manifest_path,
-            srcdir=ns.srcdir,
+            srcdir=os.path.join(ns.srcdir),  # exclude / on path end
             ballistica_path=ns.ballistica_path,
             git_path=ns.git_path,
             ballistica_repo_url=ns.ballistica_repo_url,
             tooldir=ns.tooldir,
-            tool_manifest_path=ns.tool_manifest_path)
+            tool_manifest_path=ns.tool_manifest_path,
+            make_path=ns.make_path)
         getattr(app, ns.target)()
 
 
