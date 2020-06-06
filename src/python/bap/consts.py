@@ -9,7 +9,7 @@ except (ImportError, AttributeError):  # Running not from BallisticaCore, just t
     ROOT_DIR = os.path.join(_envval, '.bap')
 
 
-DBFILE = 'bap.db'
+DBFILE = os.path.join(ROOT_DIR, '.bap.db')
 REPO_DIR = os.path.join(ROOT_DIR, '.baprepos')
 CACHE_DIR = os.path.join(ROOT_DIR, '.bapcache')
 os.makedirs(REPO_DIR, exist_ok=True)
