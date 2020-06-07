@@ -27,7 +27,6 @@ def get_download_url(pkgname: str) -> str:
         res = cur.execute(
             'SELECT name, desc, version FROM packages WHERE name = ?', (pkgname,)).fetchone()
         if res:
-            print(res)
             founds.append(repo)
     if not founds:
         raise PackageNotFoundError(f'package {pkgname} not found')

@@ -4,5 +4,9 @@
   "src/python/bap/pkgcontrol.py",
   "src/python/bap/package.py",
   "src/python/bap/pkginfo.py",
-  "src/python/bap/consts.py"
+  "src/python/bap/consts.py",
+  "src/python/bap/repo/__init__.py",
+  "src/python/bap/repo/sync.py",
+  "src/python/bap/repo/download.py",
+  "src/python/bap/repo/search.py"
 ]

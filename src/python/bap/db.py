@@ -6,9 +6,11 @@ import os
 import sqlite3
 
 from .pkginfo import PkgInfo, Person, Version
+from .consts import DBFILE
+
 
 class Database:
-    def __init__(self, path: str):
+    def __init__(self, path: str = DBFILE):
         self._dbfile = path
         _setup_requered = not os.path.exists(self._dbfile)
         self._connection = sqlite3.connect(self._dbfile)
