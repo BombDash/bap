@@ -51,6 +51,16 @@ class Database:
             desc=pkg[2],
             files=files)
     
+    def installed(self):
+        result = self._cursor.execute(
+            'SELECT `name`, `version`, `desc` FROM packages').fetchall()
+        for pkg in result:
+            yield PkgInfo(
+                name=pkg[0],
+                version=Version.from_string(pkg[1]),
+                desc=pkg[2],
+                files=None)
+    
     def add(self, pkginfo: PkgInfo) -> None:
         self._cursor.execute('INSERT INTO `packages` (name, desc, version) VALUES (?, ?, ?)',
                              (pkginfo.name, pkginfo.desc, pkginfo.version.to_string()))

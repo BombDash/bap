@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import os
 import distutils.dir_util
+from .pkginfo import PkgInfo
 from . import package
 from .db import Database
 from .consts import ROOT_DIR, DBFILE
@@ -13,12 +14,13 @@ if TYPE_CHECKING:
     from typing import Optional, List
 
 
-def install(path: str) -> None:
+def install(path: str) -> PkgInfo:
     pkginfo, pkgdir = package.unpack(path)
     db = Database(DBFILE)
     db.add(pkginfo)
     db.commit()
     distutils.dir_util.copy_tree(pkgdir, ROOT_DIR)
+    return pkginfo
 
 
 def uninstall(name: str) -> None:
