@@ -228,7 +228,9 @@ class MenuWindow(ba.Window):
             valid_file_extensions=['bap'])
     
     def _do_browse_repos(self):
-        pass
+        from bap.consts import REPO_DIR
+        ba.screenmessage('Coming soon...')
+        ba.screenmessage(f'repolist file in {REPO_DIR}')
     
     def _do_back(self):
         from bastd.ui import mainmenu
