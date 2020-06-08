@@ -25,7 +25,15 @@ class Version:
 
     @classmethod
     def from_string(cls, string: str) -> Version:
-        major, minor, patch = string.split('.')
+        try:
+            major, minor, patch = string.split('.')
+        except ValueError:
+            return Version(
+                major=0,
+                minor=0,
+                patch=0,
+                prerelease='error',
+                buildinfo='error')
         patch = patch.split('-', 1)[0]
         prerelease = string.split('-', 1)[1].split('+', 1)[0] if '-' in string else None
         buildinfo = string.split('+', 1)[1] if '+' in string else None

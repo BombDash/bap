@@ -10,7 +10,7 @@ import bap
 import threading
 
 
-class InstalledBrowserWindow(ba.Window):
+class SearchWindow(ba.Window):
     def __init__(self,
                  transition: Optional[str] = 'in_right'):
         self._width = 700 if ba.app.small_ui else 600
@@ -33,7 +33,7 @@ class InstalledBrowserWindow(ba.Window):
             color=ba.app.title_color,
             h_align='center',
             v_align='center',
-            text='Installed packages',
+            text='Search new packages',
             maxwidth=210)
         height = self._height
 
@@ -53,17 +53,39 @@ class InstalledBrowserWindow(ba.Window):
                 button_type='back',
                 on_activate_call=self._back)
             ba.containerwidget(edit=self._root_widget, cancel_button=btn)
+        self._sync_button = btn = ba.buttonwidget(
+            parent=self._root_widget,
+            position=(self._width - x_inset - 140, height - 55),
+            size=(130, 60),
+            scale=0.8,
+            text_scale=0.8,
+            label="Sync",
+            on_activate_call=self._sync)
         
         self._scrollwidget: Optional[ba.Widget] = None
 
         self._refresh()
     
-    def _push_refresh(self):
-        ba.pushcall(self._refresh, from_other_thread=True)
+    def _sync_target(self):
+        try:
+            bap.repo.sync()
+        except Exception as e:
+            ba.pushcall(ba.Call(ba.screenmessage, f"Error: {e}", color=(1, 0, 0)),
+                        from_other_thread=True)
+        else:
+            ba.pushcall(ba.Call(ba.screenmessage, "Done", color=(0, 1, 0)),
+                        from_other_thread=True)
+            ba.pushcall(self._refresh,
+                        from_other_thread=True)
+    
+    def _sync(self):
+        ba.screenmessage('Syncing...')
+        threading.Thread(target=self._sync_target).start()
     
     def _refresh(self):
         if self._scrollwidget:
             self._scrollwidget.delete()
+        
         if self._subcontainer:
             self._subcontainer.delete()
 
@@ -73,8 +95,7 @@ class InstalledBrowserWindow(ba.Window):
                       self._height - self._scroll_height - 119),
             size=(self._scroll_width, self._scroll_height))
         
-        db = bap.Database()
-        entries = tuple(db.installed())
+        entries = bap.repo.get_available_packages()
         entry_height = 35
         icon_size = 35
         
@@ -137,7 +158,7 @@ class InstalledBrowserWindow(ba.Window):
             v -= entry_height
     
     def _on_entry_activated(self, pkginfo):
-        ShowPkgInfoWindow(pkginfo, parent=self)
+        ShowPkgInfoWindow(pkginfo)
     
     def _back(self):
         from bapman.ui.menu import MenuWindow
@@ -149,8 +170,7 @@ class InstalledBrowserWindow(ba.Window):
 
 
 class ShowPkgInfoWindow(ba.Window):
-    def __init__(self, pkginfo: bap.PkgInfo, parent: Optional[ba.Widget] = None):
-        self._parent = parent
+    def __init__(self, pkginfo: bap.PkgInfo):
         self._width = 400 if ba.app.small_ui else 350
         self._x_inset = x_inset = 50 if ba.app.small_ui else 0
         self._height = 243 if ba.app.small_ui else 365
@@ -180,16 +200,16 @@ class ShowPkgInfoWindow(ba.Window):
                 on_activate_call=self._back)
             ba.containerwidget(edit=self._root_widget, cancel_button=btn)
 
-        self._uninstall_button = btn = ba.buttonwidget(
+        self._install_button = btn = ba.buttonwidget(
             parent=self._root_widget,
             autoselect=False,
             position=(200 + x_inset, height - 55),
             size=(130, 60),
-            color=(1, 0.2, 0.2),
+            color=(0.2, 1.0, 0.2),
             scale=0.8,
             text_scale=0.8,
-            label="Uninstall",
-            on_activate_call=self._on_uninstall)
+            label="Install",
+            on_activate_call=self._on_install)
         
         # ba.imagewidget(
         #     parent=self._root_widget,
@@ -233,27 +253,31 @@ class ShowPkgInfoWindow(ba.Window):
             text=prepare(pkginfo.desc),
             maxwidth=210)
     
-    def _uninstall(self):
-        ba.screenmessage('Uninstalling...')
-        def _uninstall_target():
+    def _install(self):
+        ba.screenmessage('Downloading (0%)...')
+        def _install_target():
+            from bap.consts import CACHE_DIR
+            import os
             try:
-                bap.uninstall(self.pkginfo.name)
+                for p in bap.repo.download(self.pkginfo.name, progress=True):
+                    ba.pushcall(ba.Call(ba.screenmessage, f'Downloading ({p}%)...'),
+                                from_other_thread=True)
+                ba.pushcall(ba.Call(ba.screenmessage, 'Installing...', color=(1, 1, 1)),
+                            from_other_thread=True)
+                bap.install(os.path.join(CACHE_DIR, self.pkginfo.name + '.bap'))
             except Exception as e:
                 ba.print_exception()
                 ba.pushcall(ba.Call(ba.screenmessage, f'Error: {e}', color=(1, 0, 0)),
                             from_other_thread=True)
             else:
-                ba.pushcall(ba.Call(ba.screenmessage, 'Done', color=(0, 1, 0)),
-                            from_other_thread=True)
-                if self._parent:
-                    self._parent._push_refresh()
-        threading.Thread(target=_uninstall_target).start()
+                ba.pushcall(ba.Call(ba.screenmessage, 'Done', color=(0, 1, 0)), from_other_thread=True)
+        threading.Thread(target=_install_target).start()
         self._back()
     
-    def _on_uninstall(self):
+    def _on_install(self):
         from bastd.ui.confirm import ConfirmWindow
-        ConfirmWindow(text=f'Uninstall {self.pkginfo.to_string()}?',
-                      action=ba.WeakCall(self._uninstall))
+        ConfirmWindow(text=f'Install {self.pkginfo.to_string()}?',
+                      action=ba.WeakCall(self._install))
     
     def _back(self):
         ba.containerwidget(edit=self._root_widget,

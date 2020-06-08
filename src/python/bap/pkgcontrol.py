@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 
-import os
 import distutils.dir_util
+import os
 from .pkginfo import PkgInfo
 from . import package
 from .db import Database
@@ -14,12 +14,21 @@ if TYPE_CHECKING:
     from typing import Optional, List
 
 
+class FileConflictError(Exception):
+    pass
+
+
 def install(path: str) -> PkgInfo:
     pkginfo, pkgdir = package.unpack(path)
+    for root, dirs, files in os.walk(pkgdir):
+        for file in files:
+            fpath = os.path.join(root, file)
+            if os.path.exists(fpath[len(pkgdir) + 1:]):
+                raise FileConflictError(fpath[len(pkgdir) + 1:])
+    distutils.dir_util.copy_tree(pkgdir, ROOT_DIR)
     db = Database(DBFILE)
     db.add(pkginfo)
     db.commit()
-    distutils.dir_util.copy_tree(pkgdir, ROOT_DIR)
     return pkginfo
 
 

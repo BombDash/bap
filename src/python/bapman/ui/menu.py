@@ -189,18 +189,30 @@ class MenuWindow(ba.Window):
             transition='in_left').get_root_widget())
 
     def _do_search(self):
-        pass
+        from bapman.ui.search import SearchWindow
+        ba.containerwidget(edit=self._root_widget,
+                           transition=self._transition_out)
+        ba.app.main_menu_window = (SearchWindow(
+            transition='in_left').get_root_widget())
 
     def _do_install_local(self):
         from bastd.ui.fileselector import FileSelectorWindow
         from bastd.ui.confirm import ConfirmWindow
+        from bap.pkgcontrol import FileConflictError
+        from bap.db import PackageAlreadyExists
         import pathlib
         import os
 
         def _do_install(path):
             ba.screenmessage('Installing...')
-            pkginfo = bap.install(path)
-            ba.screenmessage(f'{pkginfo.to_string()} installed', color=(0, 1, 0))
+            try:
+                pkginfo = bap.install(path)
+            except FileConflictError as e:
+                ba.screenmessage(f'Error: file conflict: {e}', color=(1, 0, 0))
+            except PackageAlreadyExists as e:
+                ba.screenmessage(f'Database error: {e}', color=(1, 0, 0))
+            else:
+                ba.screenmessage(f'{pkginfo.to_string()} installed', color=(0, 1, 0))
 
         def _on_file_selected(path):
             if path is None:

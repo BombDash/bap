@@ -3,6 +3,7 @@
   "src/python/bapman/ui/menu.py",
   "src/python/bapman/ui/__init__.py",
   "src/python/bapman/ui/installedbrowser.py",
+  "src/python/bapman/ui/search.py",
   "src/python/bapman/ui/mainmenubutton.py",
   "src/python/bap/__init__.py",
   "src/python/bap/db.py",

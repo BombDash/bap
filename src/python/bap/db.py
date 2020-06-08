@@ -9,6 +9,10 @@ from .pkginfo import PkgInfo, Person, Version
 from .consts import DBFILE
 
 
+class PackageAlreadyExists(Exception):
+    pass
+
+
 class Database:
     def __init__(self, path: str = DBFILE):
         self._dbfile = path
@@ -62,13 +66,19 @@ class Database:
                 files=None)
     
     def add(self, pkginfo: PkgInfo) -> None:
-        self._cursor.execute('INSERT INTO `packages` (name, desc, version) VALUES (?, ?, ?)',
-                             (pkginfo.name, pkginfo.desc, pkginfo.version.to_string()))
+        try:
+            self._cursor.execute('INSERT INTO `packages` (name, desc, version) VALUES (?, ?, ?)',
+                                 (pkginfo.name, pkginfo.desc, pkginfo.version.to_string()))
+        except sqlite3.IntegrityError as e:
+            if 'packages.name' in str(e):
+                raise PackageAlreadyExists(f'package {pkginfo.name} already exists in database')
+            raise e
 
         assert pkginfo.files is not None
         for file in pkginfo.files:
             self._cursor.execute('INSERT INTO `files` (path, package) VALUES (?, ?)',
                                  (file, pkginfo.name))
+
 
     def remove(self, name: str) -> None:
         self._cursor.execute('DELETE FROM `files` WHERE `package` = ?', (name,))

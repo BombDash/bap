@@ -46,4 +46,3 @@ def get_available_packages() -> List[PkgInfo]:
                 version=Version.from_string(version)
             ))  # TODO: add another info to database
     return packages
-
