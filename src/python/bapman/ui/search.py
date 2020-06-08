@@ -199,6 +199,9 @@ class ShowPkgInfoWindow(ba.Window):
                 button_type='back',
                 on_activate_call=self._back)
             ba.containerwidget(edit=self._root_widget, cancel_button=btn)
+        
+        db = bap.Database()
+        existing = db.query(self.pkginfo.name)
 
         self._install_button = btn = ba.buttonwidget(
             parent=self._root_widget,
@@ -208,8 +211,10 @@ class ShowPkgInfoWindow(ba.Window):
             color=(0.2, 1.0, 0.2),
             scale=0.8,
             text_scale=0.8,
-            label="Install",
-            on_activate_call=self._on_install)
+            label="Install" if existing is None else "Reinstall"
+                            if existing.version.to_string() == self.pkginfo.version.to_string()
+                            else "Upgrade",
+            on_activate_call=self._on_install if existing is None else self._on_upgrade)
         
         # ba.imagewidget(
         #     parent=self._root_widget,
@@ -253,7 +258,7 @@ class ShowPkgInfoWindow(ba.Window):
             text=prepare(pkginfo.desc),
             maxwidth=210)
     
-    def _install(self):
+    def _install(self, upgrade: bool = False):
         ba.screenmessage('Downloading (0%)...')
         def _install_target():
             from bap.consts import CACHE_DIR
@@ -264,7 +269,8 @@ class ShowPkgInfoWindow(ba.Window):
                                 from_other_thread=True)
                 ba.pushcall(ba.Call(ba.screenmessage, 'Installing...', color=(1, 1, 1)),
                             from_other_thread=True)
-                bap.install(os.path.join(CACHE_DIR, self.pkginfo.name + '.bap'))
+                bap.install(os.path.join(CACHE_DIR, self.pkginfo.name + '.bap'),
+                            upgrade=upgrade)
             except Exception as e:
                 ba.print_exception()
                 ba.pushcall(ba.Call(ba.screenmessage, f'Error: {e}', color=(1, 0, 0)),
@@ -278,6 +284,11 @@ class ShowPkgInfoWindow(ba.Window):
         from bastd.ui.confirm import ConfirmWindow
         ConfirmWindow(text=f'Install {self.pkginfo.to_string()}?',
                       action=ba.WeakCall(self._install))
+    
+    def _on_upgrade(self):
+        from bastd.ui.confirm import ConfirmWindow
+        ConfirmWindow(text=f'Upgrade {self.pkginfo.to_string()}?',
+                      action=ba.WeakCall(self._install, upgrade=True))
     
     def _back(self):
         ba.containerwidget(edit=self._root_widget,

@@ -18,16 +18,20 @@ class FileConflictError(Exception):
     pass
 
 
-def install(path: str) -> PkgInfo:
+def install(path: str, upgrade: bool = False) -> PkgInfo:
     pkginfo, pkgdir = package.unpack(path)
-    for root, dirs, files in os.walk(pkgdir):
-        for file in files:
-            fpath = os.path.join(root, file)
-            if os.path.exists(fpath[len(pkgdir) + 1:]):
-                raise FileConflictError(fpath[len(pkgdir) + 1:])
+    if not upgrade:  # FIXME if new files
+        for root, dirs, files in os.walk(pkgdir):
+            for file in files:
+                fpath = os.path.join(root, file)
+                if os.path.exists(fpath[len(pkgdir) + 1:]):
+                    raise FileConflictError(fpath[len(pkgdir) + 1:])
     distutils.dir_util.copy_tree(pkgdir, ROOT_DIR)
     db = Database(DBFILE)
-    db.add(pkginfo)
+    if upgrade:
+        db.update(pkginfo)
+    else:
+        db.add(pkginfo)
     db.commit()
     return pkginfo
 

@@ -13,6 +13,10 @@ class PackageAlreadyExists(Exception):
     pass
 
 
+class PackageNotFound(Exception):
+    pass
+
+
 class Database:
     def __init__(self, path: str = DBFILE):
         self._dbfile = path
@@ -49,11 +53,12 @@ class Database:
         if with_files:
             files = [i[0] for i in self._cursor.execute(
                 'SELECT * FROM files WHERE files.package = ?', (name,)).fetchall()]
-        return PkgInfo(
-            name=pkg[0],
-            version=Version.from_string(pkg[1]),
-            desc=pkg[2],
-            files=files)
+        if pkg:
+            return PkgInfo(
+                name=pkg[0],
+                version=Version.from_string(pkg[1]),
+                desc=pkg[2],
+                files=files)
     
     def installed(self):
         result = self._cursor.execute(
@@ -77,6 +82,21 @@ class Database:
         assert pkginfo.files is not None
         for file in pkginfo.files:
             self._cursor.execute('INSERT INTO `files` (path, package) VALUES (?, ?)',
+                                 (file, pkginfo.name))
+    
+    def update(self, pkginfo: PkgInfo) -> None:
+        try:
+            self._cursor.execute('UPDATE `packages` SET desc=?, version=? WHERE name=?',
+                                 (pkginfo.desc, pkginfo.version.to_string(), pkginfo.name))
+        except sqlite3.IntegrityError as e:
+            if 'packages.name' in str(e):
+                raise PackageNotFound(f'package {pkginfo.name} not found in database')
+            raise e
+
+        assert pkginfo.files is not None
+        for file in pkginfo.files:
+            self._cursor.execute('INSERT INTO `files` (path, package) VALUES (?, ?)'
+                                 ' ON CONFLICT DO NOTHING',
                                  (file, pkginfo.name))
 
 
