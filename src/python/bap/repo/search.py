@@ -35,14 +35,20 @@ def get_download_url(pkgname: str) -> str:
 def get_available_packages() -> List[PkgInfo]:
     packages: List[PkgInfo] = []
     for repo in get_repositories():
-        conn = sqlite3.connect(os.path.join(REPO_DIR, repo.name + '.db'))
-        cur = conn.cursor()
-        res = cur.execute(
-            'SELECT name, desc, version FROM packages').fetchall()
-        for name, desc, version in res:
-            packages.append(PkgInfo(
-                name=name,
-                desc=desc,
-                version=Version.from_string(version)
-            ))  # TODO: add another info to database
+        try:
+            conn = sqlite3.connect(os.path.join(REPO_DIR, repo.name + '.db'))
+            cur = conn.cursor()
+            res = cur.execute(
+                'SELECT name, desc, version FROM packages').fetchall()
+            for name, desc, version in res:
+                packages.append(PkgInfo(
+                    name=name,
+                    desc=desc,
+                    version=Version.from_string(version)
+                ))  # TODO: add another info to database
+        except sqlite3.OperationalError as e:
+            if 'no such table' in str(e):
+                pass
+            else:
+                raise e
     return packages
